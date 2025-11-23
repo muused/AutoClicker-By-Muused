@@ -1,0 +1,445 @@
+import customtkinter as ctk
+from customtkinter import CTkButton, CTkEntry, CTkLabel, CTkFrame
+from tkinter import messagebox
+import threading
+import time
+import subprocess
+import sys
+import os
+
+# --- СЛОВАРЬ ПЕРЕВОДОВ ---
+LANGUAGES = {
+    "Русский": {
+        "title": "Автокликер от Muused",
+        "language_select": "Язык",
+        "interval_label": "ИНТЕРВАЛ КЛИКА",
+        "unit_ms": "мс (миллисекунды)",
+        "unit_s": "с (секунды)",
+        "unit_min": "мин (минуты)",
+        "unit_hour": "час (часы)",
+        "mouse_label": "КНОПКА МЫШИ",
+        "mouse_left": "Левая (ЛКМ)",
+        "mouse_right": "Правая (ПКМ)",
+        "hotkey_title": "ГОРЯЧАЯ КЛАВИША",
+        "hotkey_current": "Текущий бинд: ",
+        "hotkey_button": "Сменить бинд",
+        "hotkey_wait": "Нажмите клавишу...",
+        "start": "START",
+        "stop": "STOP",
+        "status_prefix": "Статус:",
+        "status_default": "Остановлен",
+        "status_running": "Запущен",
+        "status_set": "Бинд установлен на",
+        "status_waiting": "Ожидание новой клавиши...",
+        "error_number": "Интервал должен быть числом.",
+        "error_stop": "Сначала остановите кликер.",
+    },
+    "English": {
+        "title": "AutoClicker By Muused",
+        "language_select": "Language",
+        "interval_label": "CLICK INTERVAL",
+        "unit_ms": "ms (milliseconds)",
+        "unit_s": "s (seconds)",
+        "unit_min": "min (minutes)",
+        "unit_hour": "hr (hours)",
+        "mouse_label": "MOUSE BUTTON",
+        "mouse_left": "Left (LMB)",
+        "mouse_right": "Right (RMB)",
+        "hotkey_title": "HOTKEY BIND",
+        "hotkey_current": "Current Bind: ",
+        "hotkey_button": "Change Bind",
+        "hotkey_wait": "Press a key...",
+        "start": "START",
+        "stop": "STOP",
+        "status_prefix": "Status:",
+        "status_default": "Stopped",
+        "status_running": "Running",
+        "status_set": "Bind set to",
+        "status_waiting": "Waiting for new key...",
+        "error_number": "Interval must be a number.",
+        "error_stop": "Stop the clicker first.",
+    },
+    "Українська": {
+        "title": "Автоклікер від Muused",
+        "language_select": "Мова",
+        "interval_label": "ІНТЕРВАЛ КЛІКУ",
+        "unit_ms": "мс (мілісекунди)",
+        "unit_s": "с (секунди)",
+        "unit_min": "хв (хвилини)",
+        "unit_hour": "год (години)",
+        "mouse_label": "КНОПКА МИШІ",
+        "mouse_left": "Ліва (ЛКМ)",
+        "mouse_right": "Права (ПКМ)",
+        "hotkey_title": "ГАРЯЧА КЛАВІША",
+        "hotkey_current": "Поточний бінд: ",
+        "hotkey_button": "Змінити бінд",
+        "hotkey_wait": "Натисніть клавішу...",
+        "start": "СТАРТ",
+        "stop": "СТОП",
+        "status_prefix": "Статус:",
+        "status_default": "Зупинено",
+        "status_running": "Працює",
+        "status_set": "Бінд встановлено на",
+        "status_waiting": "Очікування нової клавіші...",
+        "error_number": "Інтервал має бути числом.",
+        "error_stop": "Спершу зупиніть клікер.",
+    },
+    "Deutsch": { 
+        "title": "AutoClicker von Muused",
+        "language_select": "Sprache",
+        "interval_label": "KLICK INTERVALL",
+        "unit_ms": "ms (Millisekunden)",
+        "unit_s": "s (Sekunden)",
+        "unit_min": "min (Minuten)",
+        "unit_hour": "std (Stunden)",
+        "mouse_label": "MAUSTASTE",
+        "mouse_left": "Links (LMT)",
+        "mouse_right": "Rechts (RMT)",
+        "hotkey_title": "TASTENKÜRZEL",
+        "hotkey_current": "Aktuelle Taste: ",
+        "hotkey_button": "Taste ändern",
+        "hotkey_wait": "Drücken Sie eine Taste...",
+        "start": "STARTEN",
+        "stop": "STOPPEN",
+        "status_prefix": "Status:",
+        "status_default": "Gestoppt",
+        "status_running": "Läuft",
+        "status_set": "Taste gesetzt auf",
+        "status_waiting": "Warten auf neue Taste...",
+        "error_number": "Das Intervall muss eine Zahl sein.",
+        "error_stop": "Stoppen Sie zuerst den Klicker.",
+    },
+    "中文": {
+        "title": "Muused 自动点击器",
+        "language_select": "语言",
+        "interval_label": "点击间隔",
+        "unit_ms": "毫秒 (ms)",
+        "unit_s": "秒 (s)",
+        "unit_min": "分钟 (min)",
+        "unit_hour": "小时 (hr)",
+        "mouse_label": "鼠标按键",
+        "mouse_left": "左键 (LMB)",
+        "mouse_right": "右键 (RMB)",
+        "hotkey_title": "快捷键绑定",
+        "hotkey_current": "当前绑定: ",
+        "hotkey_button": "更改绑定",
+        "hotkey_wait": "按下按键...",
+        "start": "启动",
+        "stop": "停止",
+        "status_prefix": "状态:",
+        "status_default": "已停止",
+        "status_running": "运行中",
+        "status_set": "绑定设置为",
+        "status_waiting": "等待新按键...",
+        "error_number": "间隔必须是数字。",
+        "error_stop": "请先停止点击器。",
+    }
+}
+current_lang = LANGUAGES["Русский"] 
+
+
+# --- 1. Функция автоматической установки Pynput ---
+
+def install_pynput():
+    """Проверяет и устанавливает pynput, если его нет."""
+    try:
+        import pynput
+        return pynput
+    except ImportError:
+        INSTALL_COMMAND = [sys.executable, "-m", "pip", "install", "pynput"] 
+        try:
+            # Установка без отображения консольного окна
+            subprocess.Popen(INSTALL_COMMAND, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0).communicate()
+            import pynput
+            return pynput
+        except Exception:
+            # Используем messagebox из Tkinter/CustomTkinter для вывода ошибки
+            messagebox.showerror("Критическая ошибка", "Не удалось запустить установщик pip. Проверьте права доступа и интернет.")
+            return None
+
+# --- 2. Инициализация и Импорт Компонентов ---
+pynput_module = install_pynput()
+if pynput_module is None:
+    sys.exit(1)
+
+mouse = pynput_module.mouse
+keyboard = pynput_module.keyboard
+
+
+# -----------------------------------------------------------------------------
+# --- 3. Глобальные переменные ---
+CURRENT_DELAY_SECONDS = 0.1 
+IS_CLICKING = False
+HOTKEY = keyboard.Key.f6 
+HOTKEY_DISPLAY = "F6"
+IS_SETTING_HOTKEY = False 
+CURRENT_MOUSE_BUTTON = mouse.Button.left 
+
+# --- 4. Функции логики кликера ---
+
+def calculate_delay():
+    """Рассчитывает задержку в секундах."""
+    global CURRENT_DELAY_SECONDS
+    try:
+        interval = float(interval_entry.get())
+        
+        # Получаем единицу времени из переменной, используя словарь current_lang
+        unit_text = unit_var.get()
+        
+        multiplier = 1.0
+        
+        # Проверяем на соответствие всем языковым вариантам
+        if unit_text == current_lang['unit_ms']:
+            multiplier = 0.001
+        elif unit_text == current_lang['unit_s']:
+            multiplier = 1.0
+        elif unit_text == current_lang['unit_min']:
+            multiplier = 60.0
+        elif unit_text == current_lang['unit_hour']:
+            multiplier = 3600.0
+            
+        new_delay = interval * multiplier
+        
+        MIN_DELAY = 0.0001
+        if new_delay < MIN_DELAY:
+             new_delay = MIN_DELAY
+             
+        CURRENT_DELAY_SECONDS = new_delay
+
+    except ValueError:
+        CURRENT_DELAY_SECONDS = 0.1
+        # Используем messagebox, который корректно работает с CustomTkinter
+        messagebox.showerror(current_lang['error_number'], current_lang['error_number'])
+
+
+def start_clicker():
+    """Запуск кликера."""
+    global IS_CLICKING
+    calculate_delay()
+    
+    if not IS_CLICKING:
+        IS_CLICKING = True
+        threading.Thread(target=click_loop, daemon=True).start()
+        update_status(f"{current_lang['status_running']} ({HOTKEY_DISPLAY})", color="green")
+        start_btn.configure(state="disabled")
+        stop_btn.configure(state="normal")
+
+def stop_clicker():
+    """Остановка кликера."""
+    global IS_CLICKING
+    if IS_CLICKING:
+        IS_CLICKING = False
+        update_status(f"{current_lang['status_default']} ({HOTKEY_DISPLAY})", color="red")
+        stop_btn.configure(state="disabled")
+        start_btn.configure(state="normal")
+
+def click_loop():
+    """Основной цикл кликанья."""
+    mouse_controller = mouse.Controller()
+    while IS_CLICKING:
+        mouse_controller.click(CURRENT_MOUSE_BUTTON, 1)
+        time.sleep(CURRENT_DELAY_SECONDS)
+
+def get_key_name(key):
+    """Возвращает читаемое имя клавиши."""
+    try:
+        return key.char.upper()
+    except AttributeError:
+        name = str(key).split('.')[-1].upper()
+        if name.startswith('F') and len(name) > 1:
+            return name
+        return name.capitalize()
+
+def set_new_hotkey_mode():
+    """Включает режим ожидания новой горячей клавиши."""
+    global IS_SETTING_HOTKEY
+    if IS_CLICKING:
+        messagebox.showwarning(current_lang['error_stop'], current_lang['error_stop'])
+        return
+        
+    IS_SETTING_HOTKEY = True
+    hotkey_btn.configure(state="disabled", text=current_lang['hotkey_wait'])
+    hotkey_label.configure(text=current_lang['hotkey_wait'])
+    update_status(current_lang['status_waiting'], color="yellow")
+
+def on_key_press(key):
+    """Обработчик нажатия клавиши для горячей клавиши и установки бинда."""
+    global HOTKEY, HOTKEY_DISPLAY, IS_SETTING_HOTKEY
+
+    if IS_SETTING_HOTKEY:
+        HOTKEY = key
+        HOTKEY_DISPLAY = get_key_name(key)
+        IS_SETTING_HOTKEY = False
+        
+        hotkey_btn.configure(state="normal", text=current_lang['hotkey_button'])
+        hotkey_label.configure(text=f"{current_lang['hotkey_current']} {HOTKEY_DISPLAY}")
+        update_status(f"{current_lang['status_set']} {HOTKEY_DISPLAY}. {current_lang['status_default']}.", color="red")
+        return
+
+    if key == HOTKEY:
+        if IS_CLICKING:
+            stop_clicker()
+        else:
+            start_clicker()
+
+# --- 5. Функции управления GUI ---
+
+def update_status(message, color="red"):
+    """Обновление статуса с переводом префикса 'Статус:' и увеличенной шириной."""
+    status_label.configure(text=f"{current_lang['status_prefix']} {message}", text_color=color)
+
+def update_mouse_button(choice):
+    """Обновляет кнопку мыши на основе выбора в ComboBox."""
+    global CURRENT_MOUSE_BUTTON
+    # Сверяем по локализованному тексту
+    if choice == current_lang['mouse_left']:
+        CURRENT_MOUSE_BUTTON = mouse.Button.left
+    elif choice == current_lang['mouse_right']:
+        CURRENT_MOUSE_BUTTON = mouse.Button.right
+    update_status(f"{current_lang['mouse_label']}: {choice}. {current_lang['status_default']}.", color="red")
+    
+def validate_input(P):
+    """Проверяет, является ли введенное значение числом."""
+    if P == "" or P.replace('.', '', 1).isdigit():
+        return True
+    return False
+
+def switch_language(new_language):
+    """Переключает язык интерфейса и обновляет все элементы."""
+    global current_lang
+    current_lang = LANGUAGES[new_language]
+    
+    # Обновление заголовка
+    app.title(current_lang['title'])
+    
+    # Обновление значений в селекторах (ComboBox)
+    units = [current_lang['unit_ms'], current_lang['unit_s'], current_lang['unit_min'], current_lang['unit_hour']]
+    unit_selector.configure(values=units)
+    unit_var.set(units[0]) # Устанавливаем первое значение по умолчанию
+    
+    mouse_buttons = [current_lang['mouse_left'], current_lang['mouse_right']]
+    mouse_button_selector.configure(values=mouse_buttons)
+    mouse_button_var.set(mouse_buttons[0])
+    
+    # Обновление текста меток
+    lang_label.configure(text=current_lang['language_select'])
+    interval_label.configure(text=current_lang['interval_label'])
+    mouse_label.configure(text=current_lang['mouse_label'])
+    hotkey_title.configure(text=current_lang['hotkey_title'])
+    hotkey_label.configure(text=f"{current_lang['hotkey_current']} {HOTKEY_DISPLAY}")
+    hotkey_btn.configure(text=current_lang['hotkey_button'])
+    start_btn.configure(text=current_lang['start'])
+    stop_btn.configure(text=current_lang['stop'])
+    
+    # Обновление статуса
+    current_status_msg = current_lang['status_running'] if IS_CLICKING else current_lang['status_default']
+    update_status(f"{current_status_msg} ({HOTKEY_DISPLAY})", color="green" if IS_CLICKING else "red")
+
+
+# -----------------------------------------------------------------------------
+# --- 6. Настройка и запуск GUI (CustomTkinter, Сине-Серый) ---
+# -----------------------------------------------------------------------------
+
+ctk.set_appearance_mode("Dark") 
+ctk.set_default_color_theme("blue") # Используем стандартную сине-серую тему
+
+app = ctk.CTk()
+app.title(current_lang['title']) 
+app.geometry("300x480") # Увеличенная высота для всех элементов
+app.resizable(False, False)
+
+# Устанавливаем функцию валидации ввода
+vcmd = (app.register(validate_input), '%P')
+
+# Основной фрейм
+main_frame = CTkFrame(app, corner_radius=10)
+main_frame.pack(pady=20, padx=20, fill="both", expand=True)
+
+# --- Блок выбора языка ---
+lang_frame = CTkFrame(main_frame, fg_color="transparent")
+lang_frame.pack(pady=(5, 15), fill="x")
+
+lang_label = CTkLabel(lang_frame, text=current_lang['language_select'], font=("Roboto", 12))
+lang_label.pack(side="left", padx=(0, 10))
+
+lang_var = ctk.StringVar(value="Русский")
+lang_selector = ctk.CTkComboBox(lang_frame, 
+                                 variable=lang_var, 
+                                 values=list(LANGUAGES.keys()),
+                                 command=switch_language,
+                                 width=150)
+lang_selector.pack(side="right")
+# ---
+
+# --- Настройка скорости (Интервал + Единица времени) ---
+interval_label = CTkLabel(main_frame, text=current_lang['interval_label'], font=("Roboto", 12, "bold"))
+interval_label.pack(pady=(10, 5))
+
+speed_frame = CTkFrame(main_frame, fg_color="transparent")
+speed_frame.pack(pady=5)
+
+# Ввод интервала
+interval_entry = CTkEntry(speed_frame, width=100, validate='key', validatecommand=vcmd, placeholder_text="100", corner_radius=8)
+interval_entry.insert(0, "100")
+interval_entry.pack(side="left", padx=(0, 5))
+
+# Выбор единицы времени
+unit_var = ctk.StringVar(value=current_lang['unit_ms'])
+unit_selector = ctk.CTkComboBox(speed_frame, 
+                             variable=unit_var, 
+                             values=[current_lang['unit_ms'], current_lang['unit_s'], current_lang['unit_min'], current_lang['unit_hour']],
+                             command=lambda x: calculate_delay(), 
+                             width=120)
+unit_selector.pack(side="right")
+# ---
+
+# --- Выбор кнопки мыши ---
+mouse_label = CTkLabel(main_frame, text=current_lang['mouse_label'], font=("Roboto", 12, "bold"))
+mouse_label.pack(pady=(15, 5))
+
+mouse_button_var = ctk.StringVar(value=current_lang['mouse_left'])
+mouse_button_selector = ctk.CTkComboBox(main_frame, 
+                                     variable=mouse_button_var, 
+                                     values=[current_lang['mouse_left'], current_lang['mouse_right']],
+                                     command=update_mouse_button,
+                                     width=225)
+mouse_button_selector.pack(pady=5)
+# ---
+
+# --- Настройка горячей клавиши ---
+hotkey_title = CTkLabel(main_frame, text=current_lang['hotkey_title'], font=("Roboto", 12, "bold"))
+hotkey_title.pack(pady=(15, 5))
+
+hotkey_label = CTkLabel(main_frame, text=f"{current_lang['hotkey_current']} {HOTKEY_DISPLAY}", text_color="#aaaaaa")
+hotkey_label.pack(pady=(0, 5))
+
+# Серый (похожий на оригинальный) акцент
+hotkey_btn = CTkButton(main_frame, text=current_lang['hotkey_button'], command=set_new_hotkey_mode,
+                       fg_color="gray", hover_color="#555555", width=225) 
+hotkey_btn.pack(pady=5)
+# ---
+
+# --- Кнопки Старт/Стоп ---
+start_stop_frame = CTkFrame(main_frame, fg_color="transparent")
+start_stop_frame.pack(pady=15, fill="x")
+
+start_btn = CTkButton(start_stop_frame, text=current_lang['start'], command=start_clicker,
+                       fg_color="#4CAF50", hover_color="#388E3C", width=110, corner_radius=10) 
+start_btn.pack(side="left", expand=True, padx=(0, 5))
+
+stop_btn = CTkButton(start_stop_frame, text=current_lang['stop'], command=stop_clicker,
+                       fg_color="#F44336", hover_color="#D32F2F", width=110, state="disabled", corner_radius=10) 
+stop_btn.pack(side="right", expand=True, padx=(5, 0))
+
+# Метка статуса (УВЕЛИЧЕНА ШИРИНА ДЛЯ ИСПРАВЛЕНИЯ ОБРЕЗКИ)
+status_label = CTkLabel(app, text=f"{current_lang['status_prefix']} {current_lang['status_default']} ({HOTKEY_DISPLAY})", text_color="red", width=260)
+status_label.pack(pady=(10, 10))
+
+# --- 7. Запуск прослушивания клавиатуры ---
+
+keyboard_listener = keyboard.Listener(on_press=on_key_press)
+keyboard_listener.daemon = True 
+keyboard_listener.start()
+
+# Запуск основного цикла GUI
+app.mainloop()
